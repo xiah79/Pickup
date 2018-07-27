@@ -12,7 +12,10 @@ TEXT = ''
 
 #获取当前日期
 def get_date():
-    return time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time()))
+    #return time.strftime('%Y-%m-%d %H:%M:%S',time.localtime(time.time()))
+    d = time.strftime('%Y-%m-%d', time.localtime(time.time()))
+    t = '17:' + str(random.randint(40, 59)) + ':' + str(random.randint(0, 59))
+    return d + ' ' + t
 
 #密码 MD5加密
 def pwd_md5(src):

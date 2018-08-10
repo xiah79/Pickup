@@ -4,8 +4,8 @@ import requests
 import json
 import copy
 import datetime
+import cx_Oracle
 from dateutil.relativedelta import relativedelta
-
 
 def is_number(s):
     try:
@@ -29,24 +29,32 @@ def getLastDate(d, n):
 
     return nd.strftime('%Y-%m-%d')
 
-s = []
 ds = {}
 dic = {0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [], 7: [], 8: [], 9: [], 10: [],
-     11: [], 12: [], 13: [], 14: [], 15: [], 16: [], 17: [], 18: []}
+     11: [], 12: [], 13: [], 14: [], 15: [], 16: [], 17: [], 18: [], 19: []}
 index = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
 
 global jgid
-date = '2018-01-01'
+date = '2018-07-01'
+month = int(date.split('-')[1]) - 1
+
+#db
+username="omr_sa"
+userpwd="selectsa"
+host="172.31.10.214"
+port=1521
+dbname="orcl"
+
+field = {0:'A', 1:'B', 2:'C', 3:'D', 4:'E', 5:'F', 6:'G', 7:'H', 8:'I', 9:'J', 10:'K', 11:'L'}
+dsn=cx_Oracle.makedsn(host, port, dbname)
+conn=cx_Oracle.connect(username, userpwd, dsn)
+cursor = conn.cursor()
 
 dept_list1 = ['3828','3829','3830','3801','3802','3827','3800','3804','3805','3806','3807','3808','3809','3810',
               '3811','3812','3813','3850','3814','3815','3816','3817','3818','3820','3822','3823','3821','3826','3844',
               '3834','3835','3836','3861','3845','3846','3000','3849','3837','3839','3840','3841','3851','3852','3853',
               '3854','3855','3856','3857','3858','3859','3505','3501','3162','191','192','3819']
 
-# dept_list1 = ['3827','3800','3804','3805','3806','3807','3808','3809','3810',
-#               '3811','3812','3813','3850','3814','3815','3816','3817','3818','3820','3822','3823','3821','3826','3844',
-#               '3834','3835','3836','3861','3845','3846','3000','3849','3837','3839','3840','3841','3851','3852','3853',
-#               '3854','3855','3856','3857','3858','3859','3505','3501','3162','191','192','3819']
 #本院科室列表
 # dept_list1 = ['6006','303','304','7031','305','306','307','308','309','310','328','302','317','312','313','314','315',
 #               '316','43','551','150','552','9000','25','101','42','206','202','15','221','553','7022','24','512','207',
@@ -65,11 +73,12 @@ res = requests.get(url, params={'_dc':'1516002508895'}, cookies = cookies)
 res.encoding = 'utf-8'
 
 if res.status_code == 200:
+
     url = 'http://172.31.10.212:82/iENM/auth/mgzb/get/data/list.pt'
 
-    cookies = {'JSESSIONID':'06E68C4DA84A91EB97CC609516BA5ED3',
-               'sample.tokenSecret':'e072c7f53ec52e4b1f9c61e02aefdba2',
-               'sample.accessToken':'d48389c45290e10b90691abd71902c38',
+    cookies = {'JSESSIONID':'1DB4A540E258848460DAB284DAD8FD61',
+               'sample.tokenSecret':'adb18c860f951482a8a12c02b6e5e092',
+               'sample.accessToken':'d03a902b0df76f1abcbe53ed7948c4ce',
                'SSO':'true'
               }
 
@@ -121,24 +130,48 @@ if res.status_code == 200:
                         # print("%2s %s %s" % (i, l['sensitiveName'], v))
                         ds[i].append(v)
 
+                        # db2
+                        params = {"jgid": jgid, "dept_code": dept_list1[it], "class": i+1}
+                        sql = "select %s from IENM_SENSITIVE_2018 where jgid=:jgid and dept_code=:dept_code and class=:class" % field[month]
+
+                        cursor.execute(sql, params)
+                        result = cursor.fetchall()
+                        num = cursor.rowcount
+
+                        #sql = "update IENM_SENSITIVE_2018 set %s=%.3f where jgid=:jgid and dept_code=:dept_code and class=:class" % (field[month], v)
+                        if num == 0:
+                            # insert
+                            sql = "insert into IENM_SENSITIVE_2018(CLASS, DEPT_CODE, %s, JGID) VALUES (:class, :dept_code, %.3f, :jgid)" %(field[month], v)
+                        else:
+                            # update
+                            sql = "update IENM_SENSITIVE_2018 set %s=%.3f where jgid=:jgid and dept_code=:dept_code and class=:class" % (field[month], v)
+                        print(sql)
+
+                        cursor.execute(sql, params)
             print('   已完成' + str(j+1) + '月的数据抓取...')
+        # db3
+        conn.commit()
 
-        s = []
-        for i in range(len(ds)):
-            s.append(ds[i])
-
-        col  = pd.DataFrame(np.array(index, dtype=np.number).reshape(19, 1), columns=['id'],
-                            index=index)
-        dept = pd.DataFrame(np.array([dept_list1[it]] * 19).reshape(19, 1), columns=['dept_code'],
-                            index=index)
-        df   = pd.DataFrame(np.array(s),
-                            index=index)
-        code = pd.DataFrame(np.array([jgid] * 19).reshape(19, 1), columns=['jgid'],
-                            index=index)
-
-        frams = [col, dept, df, code]
-        dt = pd.concat(frams, axis=1)
-        dt.to_excel('c:/data/'+ dept_list1[it] + '.xlsx')
-        print('['+dept_list1[it] + ']的文件已生成！')
+        # cursor.close()
+        # conn.close()
+        # s = []
+        # for i in range(len(ds)):
+        #     s.append(ds[i])
+        #
+        # col  = pd.DataFrame(np.array(index, dtype=np.number).reshape(19, 1), columns=['id'],
+        #                     index=index)
+        # dept = pd.DataFrame(np.array([dept_list1[it]] * 19).reshape(19, 1), columns=['dept_code'],
+        #                     index=index)
+        # df   = pd.DataFrame(np.array(s),
+        #                     index=index)
+        # code = pd.DataFrame(np.array([jgid] * 19).reshape(19, 1), columns=['jgid'],
+        #                     index=index)
+        #
+        # frams = [col, dept, df, code]
+        # dt = pd.concat(frams, axis=1)
+        # dt.to_excel('c:/data/'+ dept_list1[it] + '.xlsx')
+        # print('['+dept_list1[it] + ']的文件已生成！')
 
     print('共计'+ str(len(dept_list1)) +'个科室文件已全部创建完毕！')
+    cursor.close()
+    conn.close()
